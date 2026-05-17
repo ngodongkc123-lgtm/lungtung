@@ -13,56 +13,44 @@ local WORLD3_ID = 17503543197
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
 local LocalPlayer = game.Players.LocalPlayer
 
 local Library = ReplicatedStorage.Library
 local Client = ReplicatedStorage.Library.Client
 
-local Network = require(Client.Network)
-local Save = require(Client.Save)
-
+-- SỬA LỖI: Gom các khai báo module lại gọn gàng, không bị trùng lặp biến
 local Network = require(Client.Network)
 local Breakables = workspace['__THINGS'].Breakables
 
--- Thư viện Save xử lý dữ liệu túi đồ
 local SaveModule = require(Client.Save)
 local Save = SaveModule.Get or SaveModule.GetSave
 
 -- Cấu hình danh sách Lucky Block muốn farm trên map
 local FarmList = {
-    ["abcd1"] = true,  
-    ["abcd2"] = true,
-    ["abcd3"] = true,
-    ["abcd4"] = true,
-    ["abcd"] = true,
-    ["abcd"] = true,  
-    ["abcd"] = true,
-    ["abcd"] = true,
-    ["abcd"] = true,
-    ["abcd"] = true,
-    ["abcd"] = true,  
-    ["abcd8"] = true,
-    ["abcd7"] = true,
-    ["abcd6"] = true,
-    ["abcd5"] = true
+    ["abcd1"] = true, ["abcd2"] = true, ["abcd3"] = true, ["abcd4"] = true,
+    ["abcd5"] = true, ["abcd6"] = true, ["abcd7"] = true, ["abcd8"] = true,
+    ["abcd"] = true
 }
-
 
 local Map = workspace:FindFirstChild("Map") or workspace:FindFirstChild("Map2") or workspace:FindFirstChild("Map3")
 local Areas = {}
 
 --====================================================================================================
+-- LỌC CÁC KHU VỰC TRÊN MAP
 --====================================================================================================
-
 for _,v in ipairs(Config.Areas) do
     local Area = Map and Map:FindFirstChild(v)
-    if Area then table.insert(Areas, Area)
-    else warn("Area not found: " .. v) end
+    if Area then 
+        table.insert(Areas, Area)
+    else 
+        warn("Area not found: " .. v) 
+    end
 end
 
+--====================================================================================================
+-- VÒNG LẶP TELEPORT & CHUYỂN WORLD
+--====================================================================================================
 task.spawn(function()
-    -- Chạy vòng lặp farm qua các khu vực đã thiết lập ở trên
     for index, targetArea in ipairs(Areas) do
         local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
         local rootPart = character:WaitForChild("HumanoidRootPart", 2.5)
@@ -102,13 +90,10 @@ task.spawn(function()
     elseif game.PlaceId == WORLD3_ID then
         print("=== CHÚ Ý: Đang ở World 3. Tiến hành quay trở lại World 1... ===")
         pcall(function()
-            -- Remote quay về World 1 thường được đặt tên là World1Teleport hoặc lệnh tương tự tùy thuộc vào code Server của game
             local World1Remote = ReplicatedStorage:WaitForChild("Network"):WaitForChild("World1Teleport")
             World1Remote:InvokeServer()
         end)
-        
     else
-        -- Phòng hờ ID lạ
         print("=== CHÚ Ý: ID game không xác định ("..tostring(game.PlaceId).."). Chạy lệnh tele World 2 dự phòng... ===")
         pcall(function()
             local World2Remote = ReplicatedStorage:WaitForChild("Network"):WaitForChild("World2Teleport")
@@ -117,11 +102,9 @@ task.spawn(function()
     end
 end)
 
-
 --=================================================================================================
+-- VÒNG LẶP AUTO FARM (ĐÁNH CHEST/BLOCK)
 --=================================================================================================
-
--- đánh chest 
 task.spawn(function()
     while true do
         local char = LocalPlayer.Character
@@ -141,9 +124,27 @@ task.spawn(function()
                 end
             end
         end
-        
         task.wait(0.05)
     end
 end)
+
 --=================================================================================================
+-- TỰ ĐỘNG NHẶT TÚI QUÀ (LOOTBAGS) - ĐÃ TỐI ƯU QUÉT SẠCH QUÀ TRÊN ĐẤT
 --=================================================================================================
+task.spawn(function()
+    local LootbagsFolder = workspace['__THINGS']:WaitForChild("Lootbags", 5)
+    if LootbagsFolder then
+        -- Bước 1: Quét sạch các túi quà đang nằm sẵn trên sàn khi vừa vào game/world mới
+        for _, lootbag in ipairs(LootbagsFolder:GetChildren()) do
+            Network.Fire("Lootbags_Claim", { lootbag.Name })
+        end
+        
+        -- Bước 2: Chờ nhặt các túi quà mới rơi ra từ block bị đập vỡ
+        LootbagsFolder.ChildAdded:Connect(function(lootbag)
+            task.wait()
+            if lootbag and lootbag.Parent then
+                Network.Fire("Lootbags_Claim", { lootbag.Name })
+            end
+        end)
+    end
+end)
